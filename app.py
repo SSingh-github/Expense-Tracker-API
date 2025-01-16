@@ -22,7 +22,7 @@ client = MongoClient(uri, server_api=ServerApi('1'))
 # Access database and collection
 db = client["ExpenseTracking"]
 users_collection = db["Users"]
-
+expenses_collection = db["Expenses"] 
 # API: Sign-Up
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -117,3 +117,44 @@ def token_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
+# API: Add New Expense
+@app.route('/add_expense', methods=['POST'])
+@token_required
+def add_expense():
+    try:
+        # Get user info from decoded JWT
+        user_data = request.user
+        username = user_data.get("username")
+
+        # Get expense details from request body
+        data = request.json
+        expense_name = data.get("expense_name")
+        expense_category = data.get("expense_category")
+        date = data.get("date")  # Expected in ISO format (e.g., 2025-01-16)
+        amount = data.get("amount")
+
+        # Validate input
+        if not all([expense_name, expense_category, date, amount]):
+            return jsonify({"error": "All fields (expense_name, expense_category, date, amount) are required"}), 400
+
+        if not isinstance(amount, (int, float)) or amount <= 0:
+            return jsonify({"error": "Amount must be a positive number"}), 400
+
+        # Create expense document
+        expense = {
+            "username": username,
+            "expense_name": expense_name,
+            "expense_category": expense_category,
+            "date": date,
+            "amount": amount,
+            "created_at": datetime.datetime.utcnow()  # Timestamp
+        }
+
+        # Insert expense into the database
+        expenses_collection.insert_one(expense)
+
+        return jsonify({"message": "Expense added successfully"}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
